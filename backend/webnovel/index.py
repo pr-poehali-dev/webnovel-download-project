@@ -2,6 +2,7 @@ import json
 import re
 import time
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Tuple
 
 import requests
@@ -265,13 +266,50 @@ def parse_chapter(ch: dict, idx: int) -> Dict:
 
 # ─── Скачивание текста глав ──────────────────────────────────────────────────
 
+def new_session_simple() -> requests.Session:
+    """Лёгкая сессия без warmup — для параллельных потоков."""
+    import urllib3
+    urllib3.disable_warnings()
+    s = requests.Session()
+    s.headers.update(HEADERS)
+    s.verify = False
+    return s
+
+
+def fetch_chapter_parallel(args) -> tuple:
+    """Точка входа для каждого потока: создаёт свою сессию и скачивает главу."""
+    book_id, cid, csrf = args
+    s = new_session_simple()
+    name, text = fetch_chapter_text(s, book_id, cid, csrf)
+    return cid, name, text
+
+
 def download_chapters(book_id: str, chapter_ids: List[str]) -> Dict[str, Any]:
     s, csrf = make_session(book_id)
-    result = []
-    for cid in chapter_ids[:200]:
-        name, text = fetch_chapter_text(s, book_id, str(cid), csrf)
-        result.append({'id': cid, 'name': name, 'content': text})
-        time.sleep(0.4)
+    ids = [str(cid) for cid in chapter_ids[:200]]
+    log.info(f'download_chapters parallel count={len(ids)}')
+
+    results: Dict[str, Dict] = {}
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = {
+            executor.submit(fetch_chapter_parallel, (book_id, cid, csrf)): cid
+            for cid in ids
+        }
+        for future in as_completed(futures):
+            try:
+                cid, name, text = future.result()
+                results[cid] = {'id': cid, 'name': name, 'content': text}
+            except Exception as e:
+                cid = futures[future]
+                log.error(f'fetch_chapter_parallel error cid={cid}: {e}')
+                results[cid] = {
+                    'id': cid,
+                    'name': f'Chapter {cid}',
+                    'content': '[Не удалось загрузить — глава может быть платной]',
+                }
+
+    # Восстанавливаем исходный порядок глав
+    result = [results[cid] for cid in ids if cid in results]
     return resp(200, {'chapters': result})
 
 

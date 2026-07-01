@@ -1,0 +1,1 @@
+{"tests": [{"name": "OPTIONS preflight", "method": "OPTIONS", "path": "/", "expectedStatus": 200}, {"name": "No auth returns 401", "method": "POST", "path": "/", "body": {"action": "stats"}, "expectedStatus": 401, "bodyMatcher": "partial"}]}
