@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import JSZip from 'jszip';
 import Icon from '@/components/ui/icon';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -87,7 +88,7 @@ const Index = () => {
     }
   };
 
-  const buildFile = (list: { name: string; content: string }[]) => {
+  const buildFile = async (list: { name: string; content: string }[]) => {
     if (format === 'html') {
       const body = list
         .map((c) => `<h2>${escapeHtml(c.name)}</h2>${c.content.split('\n\n').map((p) => `<p>${escapeHtml(p)}</p>`).join('')}`)
@@ -96,11 +97,8 @@ const Index = () => {
       return { blob: new Blob([html], { type: 'text/html' }), ext: 'html' };
     }
     if (format === 'epub') {
-      const body = list
-        .map((c) => `<h2>${escapeHtml(c.name)}</h2>${c.content.split('\n\n').map((p) => `<p>${escapeHtml(p)}</p>`).join('')}`)
-        .join('\n');
-      const doc = `<?xml version="1.0" encoding="utf-8"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>${escapeHtml(bookTitle)}</title></head><body><h1>${escapeHtml(bookTitle)}</h1>${body}</body></html>`;
-      return { blob: new Blob([doc], { type: 'application/epub+zip' }), ext: 'epub' };
+      const blob = await buildEpub(bookTitle, list);
+      return { blob, ext: 'epub' };
     }
     const txt = `${bookTitle}\n\n` + list.map((c) => `${c.name}\n\n${c.content}`).join('\n\n\n');
     return { blob: new Blob([txt], { type: 'text/plain' }), ext: 'txt' };
@@ -124,7 +122,7 @@ const Index = () => {
         toast({ title: 'Ошибка скачивания', description: data.error, variant: 'destructive' });
         return;
       }
-      const { blob, ext } = buildFile(data.chapters);
+      const { blob, ext } = await buildFile(data.chapters);
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = `${bookTitle.replace(/[^\w\d]+/g, '_')}.${ext}`;
@@ -360,6 +358,106 @@ const Index = () => {
 
 function escapeHtml(s: string) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+async function buildEpub(title: string, chapters: { name: string; content: string }[]): Promise<Blob> {
+  const zip = new JSZip();
+
+  // mimetype — первым, без сжатия
+  zip.file('mimetype', 'application/epub+zip', { compression: 'STORE' });
+
+  // META-INF/container.xml
+  zip.folder('META-INF')!.file('container.xml',
+    `<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>`);
+
+  const oebps = zip.folder('OEBPS')!;
+
+  // Каждая глава — отдельный XHTML файл
+  const manifestItems: string[] = [];
+  const spineItems: string[] = [];
+
+  chapters.forEach((ch, i) => {
+    const id = `chapter_${i + 1}`;
+    const fname = `${id}.xhtml`;
+    const paras = ch.content
+      .split('\n\n')
+      .filter(Boolean)
+      .map((p) => `    <p>${escapeHtml(p.trim())}</p>`)
+      .join('\n');
+
+    oebps.file(fname,
+      `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+  <title>${escapeHtml(ch.name)}</title>
+  <link rel="stylesheet" type="text/css" href="style.css"/>
+</head>
+<body>
+  <h2>${escapeHtml(ch.name)}</h2>
+${paras}
+</body>
+</html>`);
+
+    manifestItems.push(`<item id="${id}" href="${fname}" media-type="application/xhtml+xml"/>`);
+    spineItems.push(`<itemref idref="${id}"/>`);
+  });
+
+  // CSS
+  oebps.file('style.css',
+    `body { font-family: serif; font-size: 1em; line-height: 1.6; margin: 1em 2em; }
+h2 { font-size: 1.3em; margin-top: 2em; margin-bottom: 0.5em; }
+p { margin: 0.5em 0; text-indent: 1.5em; }`);
+
+  // content.opf — основной манифест
+  const uid = `urn:uuid:${crypto.randomUUID()}`;
+  oebps.file('content.opf',
+    `<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="uid" version="2.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+    <dc:title>${escapeHtml(title)}</dc:title>
+    <dc:language>en</dc:language>
+    <dc:identifier id="uid">${uid}</dc:identifier>
+  </metadata>
+  <manifest>
+    <item id="css" href="style.css" media-type="text/css"/>
+    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
+    ${manifestItems.join('\n    ')}
+  </manifest>
+  <spine toc="ncx">
+    ${spineItems.join('\n    ')}
+  </spine>
+</package>`);
+
+  // toc.ncx — оглавление
+  const navPoints = chapters.map((ch, i) => `
+    <navPoint id="nav_${i + 1}" playOrder="${i + 1}">
+      <navLabel><text>${escapeHtml(ch.name)}</text></navLabel>
+      <content src="chapter_${i + 1}.xhtml"/>
+    </navPoint>`).join('');
+
+  oebps.file('toc.ncx',
+    `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE ncx PUBLIC "-//NISO//DTD ncx 2005-1//EN" "http://www.daisy.org/z3986/2005/ncx-2005-1.dtd">
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
+  <head>
+    <meta name="dtb:uid" content="${uid}"/>
+    <meta name="dtb:depth" content="1"/>
+    <meta name="dtb:totalPageCount" content="0"/>
+    <meta name="dtb:maxPageNumber" content="0"/>
+  </head>
+  <docTitle><text>${escapeHtml(title)}</text></docTitle>
+  <navMap>${navPoints}
+  </navMap>
+</ncx>`);
+
+  return zip.generateAsync({ type: 'blob', mimeType: 'application/epub+zip' });
 }
 
 export default Index;

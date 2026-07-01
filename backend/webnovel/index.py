@@ -65,13 +65,17 @@ def extract_book_id(url: str) -> str:
 
 def make_session(book_id: str) -> Tuple[requests.Session, str]:
     '''Создаём сессию и получаем CSRF-токен через посещение страницы книги.'''
+    import urllib3
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
     s = requests.Session()
     s.headers.update(HEADERS)
+    s.verify = False
     csrf = ''
 
     # Посещаем мобильную страницу книги — получаем cookies
     try:
-        r = s.get(f'https://m.webnovel.com/book/{book_id}', timeout=20, allow_redirects=True)
+        r = s.get(f'https://m.webnovel.com/book/{book_id}', timeout=20, allow_redirects=True, verify=False)
         log.info(f'warmup status={r.status_code} cookies={list(s.cookies.keys())}')
         # Ищем CSRF в cookies
         for name in ['_csrfToken', 'csrfToken', 'csrf_token', 'csrf']:
@@ -134,7 +138,7 @@ def try_api(s: requests.Session, book_id: str, csrf: str) -> Tuple[str, List[Dic
     ]
     for url in endpoints:
         try:
-            r = s.get(url, timeout=20, headers={
+            r = s.get(url, timeout=20, verify=False, headers={
                 'Accept': 'application/json, text/plain, */*',
                 'X-Requested-With': 'XMLHttpRequest',
                 'Referer': f'https://www.webnovel.com/book/{book_id}',
@@ -166,7 +170,7 @@ def try_script_json(s: requests.Session, book_id: str, title: str) -> Tuple[str,
         f'https://m.webnovel.com/book/{book_id}',
     ]:
         try:
-            r = s.get(page_url, timeout=20)
+            r = s.get(page_url, timeout=20, verify=False)
             log.info(f'Script page {page_url} => {r.status_code} len={len(r.text)}')
             soup = BeautifulSoup(r.text, 'html.parser')
 
@@ -203,7 +207,7 @@ def try_regex_chapters(s: requests.Session, book_id: str, title: str) -> Tuple[s
         f'https://m.webnovel.com/book/{book_id}',
     ]:
         try:
-            r = s.get(page_url, timeout=20)
+            r = s.get(page_url, timeout=20, verify=False)
             text = r.text
             log.info(f'Regex page {page_url} len={len(text)}')
 
@@ -281,7 +285,7 @@ def fetch_chapter_text(s: requests.Session, book_id: str, cid: str, csrf: str = 
         f'https://www.webnovel.com/go/pcm/chapter/get-chapter-content?bookId={book_id}&chapterId={cid}&_csrfToken={token}',
     ]:
         try:
-            r = s.get(api_url, timeout=20, headers={
+            r = s.get(api_url, timeout=20, verify=False, headers={
                 'Accept': 'application/json',
                 'X-Requested-With': 'XMLHttpRequest',
                 'Referer': f'https://www.webnovel.com/book/{book_id}/{cid}',
@@ -309,7 +313,7 @@ def fetch_chapter_text(s: requests.Session, book_id: str, cid: str, csrf: str = 
             f'https://www.webnovel.com/book/{book_id}/{cid}',
             f'https://m.webnovel.com/book/{book_id}/chapter/{cid}',
         ]:
-            r = s.get(ch_url, timeout=20)
+            r = s.get(ch_url, timeout=20, verify=False)
             soup = BeautifulSoup(r.text, 'html.parser')
 
             for sel in ['h1', 'h2', '.cha-tit', '.chapter-title']:
