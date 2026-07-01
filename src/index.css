@@ -4,35 +4,35 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 240 30% 6%;
+    --foreground: 220 30% 96%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card: 240 26% 9%;
+    --card-foreground: 220 30% 96%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover: 240 26% 9%;
+    --popover-foreground: 220 30% 96%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 265 90% 66%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 240 20% 14%;
+    --secondary-foreground: 220 30% 96%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 240 18% 16%;
+    --muted-foreground: 230 15% 62%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 180 92% 55%;
+    --accent-foreground: 240 30% 6%;
 
-    --destructive: 0 84.2% 60.2%;
+    --destructive: 0 72% 55%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --border: 240 18% 18%;
+    --input: 240 18% 18%;
+    --ring: 265 90% 66%;
 
-    --radius: 0.5rem;
+    --radius: 1rem;
 
     --sidebar-background: 0 0% 98%;
 
@@ -97,5 +97,83 @@
 
   body {
     @apply bg-background text-foreground;
+    font-family: "Manrope", sans-serif;
   }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  .font-display {
+    font-family: "Sora", sans-serif;
+  }
+}
+
+@layer utilities {
+  .glass {
+    background: hsla(240, 26%, 12%, 0.55);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid hsla(265, 60%, 70%, 0.14);
+  }
+
+  .aurora {
+    background:
+      radial-gradient(
+        50% 55% at 15% 20%,
+        hsla(265, 90%, 60%, 0.32) 0%,
+        transparent 60%
+      ),
+      radial-gradient(
+        45% 50% at 85% 15%,
+        hsla(180, 92%, 55%, 0.22) 0%,
+        transparent 60%
+      ),
+      radial-gradient(
+        60% 60% at 70% 90%,
+        hsla(300, 85%, 60%, 0.18) 0%,
+        transparent 60%
+      );
+  }
+
+  .text-gradient {
+    background: linear-gradient(100deg, hsl(265 90% 72%), hsl(180 92% 60%));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .glow {
+    box-shadow:
+      0 0 0 1px hsla(265, 90%, 66%, 0.4),
+      0 8px 40px -8px hsla(265, 90%, 66%, 0.5);
+  }
+}
+
+@keyframes float-slow {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-22px) rotate(4deg);
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-float-slow {
+  animation: float-slow 8s ease-in-out infinite;
+}
+.animate-fade-up {
+  animation: fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
