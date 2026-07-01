@@ -1,0 +1,1 @@
+{"tests": [{"name": "CORS preflight", "method": "OPTIONS", "path": "/", "expectedStatus": 200}, {"name": "Invalid link returns 400", "method": "POST", "path": "/", "body": {"action": "chapters", "url": "not-a-link"}, "expectedStatus": 400, "expectedBody": {"error": "string"}, "bodyMatcher": "partial"}]}
